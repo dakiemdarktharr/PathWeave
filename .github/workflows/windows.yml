@@ -1,0 +1,61 @@
+name: Windows build, tests and installer
+on:
+  push:
+    branches: [main, master, 'codex/**']
+    tags: ['v*']
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  windows:
+    runs-on: windows-2022
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install shared Qt 6
+        uses: jurplel/install-qt-action@v4
+        with:
+          version: '6.8.3'
+          arch: win64_msvc2022_64
+          cache: true
+      - name: Install CMake and NSIS
+        shell: pwsh
+        run: |
+          choco install cmake nsis ninja --no-progress -y --allow-downgrade
+          'C:\Program Files\CMake\bin' >> $env:GITHUB_PATH
+          'C:\Program Files (x86)\NSIS' >> $env:GITHUB_PATH
+      - name: Configure, build debug and test
+        shell: pwsh
+        run: ./scripts/build.ps1 -Configuration Debug
+      - name: Configure, build release, test and package
+        shell: pwsh
+        run: ./scripts/build.ps1 -Configuration Release -Package
+      - name: Install, run workflow, restart and uninstall
+        shell: pwsh
+        run: ./scripts/verify-installer.ps1
+      - name: Upload installer and verification
+        uses: actions/upload-artifact@v4
+        with:
+          name: PathWeave-Windows-x64
+          path: |
+            release/PathWeave-Setup-x64.exe
+            release/SHA256SUMS.txt
+            artifacts/installer-verification.json
+            artifacts/installed-checks/
+            build/Release/test-results.xml
+            build/Release/enhancement-results.xml
+            build/Debug/test-results.xml
+            build/Debug/enhancement-results.xml
+          if-no-files-found: error
+      - name: Create version-tag release
+        if: startsWith(github.ref, 'refs/tags/v') && github.event_name == 'push'
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            release/PathWeave-Setup-x64.exe
+            release/SHA256SUMS.txt
+          generate_release_notes: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

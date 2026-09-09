@@ -1,0 +1,42 @@
+#pragma once
+#include <QObject>
+class TestPathWeave : public QObject {
+    Q_OBJECT
+  private slots:
+    void backupWithDeletedParent();
+    void actualTimeout();
+    void actualCancellation();
+    void actualRateLimit();
+    void actualCache();
+    void migrations();
+    void surveyValidation();
+    void surveyCompletion();
+    void separation();
+    void matchScore();
+    void excludedKeywords();
+    void excludedCompanies();
+    void salaryMatching();
+    void remoteMatching();
+    void titleSynonyms();
+    void duplicateDetection();
+    void crud();
+    void foreignKeys();
+    void statusTransitions();
+    void evidenceNoFabrication();
+    void reportCalculations();
+    void jsonRoundTrip();
+    void importRollback();
+    void csvExport();
+    void ftsSearch();
+    void sourceErrors();
+    void timeoutHandling();
+    void rateLimitHandling();
+    void cacheExpiration();
+    void offlineNetwork();
+    void urlSafety();
+    void connectors();
+    void sourceNotConfigured();
+    void demoCounts();
+    void dpapi();
+    void endToEndNativeUi();
+};

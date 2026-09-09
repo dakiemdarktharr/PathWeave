@@ -1,0 +1,13 @@
+build/
+release/
+.tools/
+*.user
+*.db*
+artifacts/
+
+*.log
+artifacts-*.txt
+
+*.sqlite*
+*.pwbackup
+*.dpapi

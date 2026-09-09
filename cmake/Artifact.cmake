@@ -1,0 +1,6 @@
+foreach(package IN LISTS CPACK_PACKAGE_FILES)
+  file(SIZE "${package}" size)
+  file(SHA256 "${package}" sha)
+  message(STATUS "PathWeave ${CPACK_PACKAGE_VERSION} installer: ${package}")
+  message(STATUS "Size: ${size} bytes | SHA-256: ${sha}")
+endforeach()
