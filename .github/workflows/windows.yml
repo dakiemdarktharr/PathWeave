@@ -70,7 +70,10 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
   macos:
-    runs-on: macos-latest
+    # Qt 6.8.x still references the legacy AGL framework. macOS 26's SDK
+    # removed it, so keep this job on macOS 15 until the Qt toolchain is
+    # upgraded to a release that no longer exports AGL.
+    runs-on: macos-15
     permissions:
       contents: write
     steps:
