@@ -1,6 +1,6 @@
 # PathWeave 1.1.0 — verification record
 
-Verified on Windows 11 x64, 2026-09-09. Native C++20 / shared Qt 6.8.3 Widgets.
+Verified on Windows 11 x64 and macOS 15 arm64 CI, 2026-09-11. Native C++20 / shared Qt 6.8.3 Widgets.
 
 | Check | Result |
 | --- | --- |
@@ -20,6 +20,7 @@ Verified on Windows 11 x64, 2026-09-09. Native C++20 / shared Qt 6.8.3 Widgets.
 | Portable runtime deployment | PASS; application version 1.1.0 |
 | Windows binary metadata | File 1.1.0.0 / product 1.1.0 |
 | Authenticode | NotSigned |
+| macOS debug/release tests + DragNDrop packaging | PASS (GitHub Actions run 34623708803) |
 
 The two suites contain 38 and 24 Qt cases, respectively, including four combined
 init/cleanup cases. Both configurations run the same suites. Network tests use
@@ -40,11 +41,15 @@ Repository: `C:/Users/ANHKHOI/Documents/ChatGPT/Path_Weave`
 
 Installer (Windows): `C:/Users/ANHKHOI/Documents/ChatGPT/Path_Weave/release/PathWeave-Setup-x64.exe`
 
-Installer (macOS, CI artifact): `C:/Users/ANHKHOI/Documents/ChatGPT/Path_Weave/release/PathWeave-Setup-macOS-<arch>.dmg`
+Installer (macOS, CI artifact): `C:/Users/ANHKHOI/Documents/ChatGPT/Path_Weave/release/PathWeave-Setup-macOS-arm64.dmg`
 
-Size: **36,180,706 bytes**
+Windows size: **36,180,669 bytes**
 
-SHA-256: `22912b5691cc7bf26fedbdb299a85e5340d26ca4ac5505976e7f4e5490e1fd69`
+Windows SHA-256: `7bd7539837bab65a2bac4681064c9ea504cc408e45052dd2deac136598060c20`
+
+macOS size: **24,014,404 bytes**
+
+macOS SHA-256: `5a7a5bdff54ff1ae21f745aec2c233d2d58ace6286d3224df2bb6423da38f630`
 
 Portable application: `C:/Users/ANHKHOI/Documents/ChatGPT/Path_Weave/release/portable/PathWeave.exe`
 
