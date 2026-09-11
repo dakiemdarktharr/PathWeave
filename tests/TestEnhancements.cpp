@@ -360,6 +360,9 @@ class TestEnhancements : public QObject {
         QCOMPARE(s.matcher().score(j, s.matchingProfile()).feedback, 0.0);
     }
     void encryptedBackup() {
+#ifndef Q_OS_WIN
+        QSKIP("Password-encrypted portable backups currently use Windows CNG; use JSON export on macOS.");
+#endif
         auto plain = QByteArray("{\"private\":\"career evidence and resume\"}");
         auto password = QString("correct horse 2026!");
         auto encoded = BackupCrypto::encrypt(plain, password);

@@ -40,10 +40,9 @@ inserted as accomplishments. Facts/certificates remain user-entered, not verifie
 
 ## Privacy and data
 
-Managed documents and images are embedded in JSON backups. Default `.pwbackup`
-files use Windows CNG AES-256-GCM, a random 128-bit salt and 96-bit nonce, a 128-bit
+Managed documents and images are embedded in JSON backups. Default Windows `.pwbackup` files use Windows CNG AES-256-GCM, a random 128-bit salt and 96-bit nonce, a 128-bit
 authentication tag, and PBKDF2-HMAC-SHA256 with 600,000 iterations. The password is
-not stored. Header version/salt/nonce are authenticated. Wrong passwords, truncated
+not stored. macOS 1.1 currently offers the explicitly labeled unencrypted JSON export path; password-encrypted backup remains Windows-only. Header version/salt/nonce are authenticated. Wrong passwords, truncated
 files and altered ciphertext fail before database replacement. SQL import remains
 transactional and validates foreign keys/document hashes. Backup size is bounded.
 

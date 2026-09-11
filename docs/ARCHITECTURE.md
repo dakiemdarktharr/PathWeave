@@ -33,8 +33,7 @@ NetworkService owns one QNetworkAccessManager. It performs only HTTPS GETs and
 disables automatic redirects and cookies; a bounded manual chain permits same-origin
 HTTPS redirects with one absolute deadline and a robots guard for arbitrary sources. Errors do not include request URLs
 or credentials. Successful raw responses are cached with expiry under a SHA-256
-request key; settings can clear them. Credential values are kept only in DPAPI
-files and transient request objects. Arbitrary JSON/RSS/page connectors first
+request key; settings can clear them. Credential values are kept only in Windows DPAPI files, the macOS Keychain, and transient request objects. Arbitrary JSON/RSS/page connectors first
 check robots.txt using matching user-agent groups and longest-path Allow/Disallow
 rules, including wildcard/end anchors and percent-encoding normalization.
 Known APIs use documented public endpoints. Authentication and anti-bot failures
@@ -54,8 +53,7 @@ is no behavioral tracking, remote model or automatic inference of achievements.
 JSON restore is transactional replacement. It validates format/version/table and
 column names, applies SQLite constraints, checks foreign keys, and forces online
 search off and clears response cache. Exports contain CV snapshots, images and
-managed document bytes, not credentials. Portable password backups wrap the JSON
-with Windows CNG AES-256-GCM/PBKDF2; plaintext JSON remains an explicit option.
+managed document bytes, not credentials. Portable password backups on Windows wrap the JSON with Windows CNG AES-256-GCM/PBKDF2; macOS 1.1 exposes explicitly labeled plaintext JSON.
 CSV escapes quotes and prefixes formula-leading cells.
 
 Full JSON backups include soft-deleted rows to preserve references from live children.

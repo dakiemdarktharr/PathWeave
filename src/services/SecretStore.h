@@ -11,5 +11,6 @@ class SecretStore {
   private:
     QString directory_;
     QString file(const QString& key) const;
+    QString serviceName() const;
 };
 } // namespace pw

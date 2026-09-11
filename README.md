@@ -71,7 +71,7 @@ flowchart LR
   Sources --> Network[Shared QNetworkAccessManager]
   Network --> Public[Public HTTPS APIs / feeds]
   Network --> Cache[(Local response cache)]
-  Sources --> Secrets[Windows DPAPI credentials]
+  Sources --> Secrets[Windows DPAPI / macOS Keychain credentials]
 ```
 
 There is no Electron, React, QML frontend, browser engine, Node.js or Python runtime.
@@ -127,8 +127,8 @@ the database remains readable to processes with access to your account.
 | User-provided URL | Public HTTPS job URL | JobPosting JSON-LD; unsupported pages require manual save |
 
 Open **Nguồn tuyển dụng → Cấu hình**. For Adzuna enter the app ID and key in the
-dedicated fields, then enable the source. They are encrypted with Windows DPAPI
-for the current Windows user, outside SQLite and JSON exports. Never paste keys
+dedicated fields, then enable the source. They are protected with Windows DPAPI on Windows and macOS Keychain on macOS
+for the current OS user, outside SQLite and JSON exports. Never paste keys
 into a generic URL. Clear credentials from Settings when needed.
 
 Enable **Cài đặt → Bật tìm việc trực tuyến**, read the first-use explanation,
@@ -170,9 +170,10 @@ Remotive source attribution and original links are shown on each listing.
 
 Full JSON backups retain soft-deleted rows so live child references can be restored.
 JSON export contains private career records, CV snapshots/photos and managed
-document contents, but no credential files. The default backup uses AES-256-GCM
-with PBKDF2-HMAC-SHA256 (600,000 iterations), implemented with Windows CNG, and a
-user-held password. Plain JSON is explicitly labeled unencrypted. Import replaces the database
+document contents, but no credential files. On Windows, the default `.pwbackup`
+uses AES-256-GCM with PBKDF2-HMAC-SHA256 (600,000 iterations), implemented with
+Windows CNG and a user-held password. macOS 1.1 currently exposes the explicitly
+labeled unencrypted `.json` export path. Plain JSON is explicitly labeled unencrypted. Import replaces the database
 transactionally, validates references and attachment hashes, clears cached responses and forces online search off. Uninstall
 preserves career data; use Delete all data first if you want records removed.
 
@@ -258,7 +259,7 @@ matching components, synonyms, exclusions, salary/remote behavior, duplicates,
 migrations, CRUD, foreign keys, status transitions, entered-only evidence,
 report calculations, JSON roundtrip/rollback, CSV escaping, FTS synchronization,
 source parsers, configuration errors, offline gating, safe URLs, real asynchronous
-fixture timeouts/cancellation/429/cache expiration, DPAPI and exact demo counts.
+fixture timeouts/cancellation/429/cache expiration, DPAPI/Keychain credential protection and exact demo counts.
 
 The native UI workflow clicks survey and form Save buttons, creates work records,
 converts evidence, loads the demo source, checks full-time/part-time/remote filters,
