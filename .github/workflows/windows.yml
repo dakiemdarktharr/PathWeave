@@ -1,12 +1,14 @@
-name: Windows build, tests and installer
+name: Desktop build, tests and installers
 on:
   push:
     branches: [main, master, 'codex/**']
     tags: ['v*']
   pull_request:
   workflow_dispatch:
+
 permissions:
   contents: read
+
 jobs:
   windows:
     runs-on: windows-2022
@@ -14,28 +16,34 @@ jobs:
       contents: write
     steps:
       - uses: actions/checkout@v4
+
       - name: Install shared Qt 6
         uses: jurplel/install-qt-action@v4
         with:
           version: '6.8.3'
           arch: win64_msvc2022_64
           cache: true
+
       - name: Install CMake and NSIS
         shell: pwsh
         run: |
           choco install cmake nsis ninja --no-progress -y --allow-downgrade
           'C:\Program Files\CMake\bin' >> $env:GITHUB_PATH
           'C:\Program Files (x86)\NSIS' >> $env:GITHUB_PATH
+
       - name: Configure, build debug and test
         shell: pwsh
         run: ./scripts/build.ps1 -Configuration Debug
+
       - name: Configure, build release, test and package
         shell: pwsh
         run: ./scripts/build.ps1 -Configuration Release -Package
+
       - name: Install, run workflow, restart and uninstall
         shell: pwsh
         run: ./scripts/verify-installer.ps1
-      - name: Upload installer and verification
+
+      - name: Upload Windows artifacts
         uses: actions/upload-artifact@v4
         with:
           name: PathWeave-Windows-x64
@@ -49,6 +57,7 @@ jobs:
             build/Debug/test-results.xml
             build/Debug/enhancement-results.xml
           if-no-files-found: error
+
       - name: Create version-tag release
         if: startsWith(github.ref, 'refs/tags/v') && github.event_name == 'push'
         uses: softprops/action-gh-release@v2
@@ -59,3 +68,45 @@ jobs:
           generate_release_notes: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  macos:
+    runs-on: macos-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Qt 6
+        uses: jurplel/install-qt-action@v4
+        with:
+          version: '6.8.3'
+          arch: clang_64
+          cache: true
+
+      - name: Install CMake
+        run: brew install cmake ninja
+
+      - name: Configure, build debug and test
+        run: |
+          cmake --preset macos-debug
+          cmake --build --preset macos-debug
+          ctest --preset macos-debug
+
+      - name: Configure, build release, test and package
+        run: |
+          cmake --preset macos-release
+          cmake --build --preset macos-release
+          ctest --preset macos-release
+          cpack --config build/macos/Release/CPackConfig.cmake -G DragNDrop
+
+      - name: Upload macOS artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: PathWeave-macOS
+          path: |
+            release/PathWeave-Setup-macOS-*.dmg
+            build/macos/Release/CTestTestfile.cmake
+            build/macos/Release/CPackConfig.cmake
+            release/SHA256SUMS.txt
+            release/build-manifest.json
+          if-no-files-found: error

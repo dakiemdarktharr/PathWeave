@@ -2,7 +2,7 @@
 
 **Turn today’s work into tomorrow’s opportunity.**
 
-PathWeave is a native Windows career workspace built with C++20 and shared Qt 6
+PathWeave is a native Windows and macOS career workspace built with C++20 and shared Qt 6
 Widgets. It connects current roles, projects, tasks and entered achievements to
 reusable career evidence, job discovery, applications, interviews and follow-ups.
 Your SQLite database stays on your computer. No account or remote backend is needed.
@@ -176,15 +176,14 @@ user-held password. Plain JSON is explicitly labeled unencrypted. Import replace
 transactionally, validates references and attachment hashes, clears cached responses and forces online search off. Uninstall
 preserves career data; use Delete all data first if you want records removed.
 
-## Local development and Windows builds
+## Local development and build commands
 
-Requirements: Windows 10/11 x64; Visual Studio 2022 or later with Desktop development
-with C++; CMake 3.24+; Ninja; shared Qt 6.5+ MSVC x64 (verified kit: Qt 6.8.3); NSIS 3.
-Qt modules: Core, Gui, Widgets, Network, SQL, PrintSupport and Test. The SQLite plugin
-must include FTS5. Qt Test is a build/test dependency, not shipped as app runtime.
+For Windows:
 
-In an x64 Visual Studio developer terminal, set `QT_ROOT_DIR` to the Qt MSVC kit
-and add its `bin` directory and NSIS to PATH:
+Requirements: Windows 10/11 x64; Visual Studio 2022 or later with Desktop development with C++.
+CMake 3.24+, Ninja, shared Qt 6.5+ MSVC x64 (verified kit: Qt 6.8.3), and NSIS 3.
+Qt modules: Core, Gui, Widgets, Network, SQL, PrintSupport, and Test.
+The SQLite plugin must include FTS5. Qt Test is a build/test dependency, not shipped as runtime.
 
 ```powershell
 $env:QT_ROOT_DIR = 'C:\Qt\6.8.3\msvc2022_64'
@@ -206,33 +205,52 @@ Or use the helper, which locates the Visual Studio developer environment:
 ./scripts/verify-installer.ps1
 ```
 
-For this workspace the shared Qt kit is installed at `.tools/Qt/6.8.3/msvc2022_64`.
-The helper uses it when QT_ROOT_DIR is unset. Python/aqt were used only to provision
-the development kit and are not needed by PathWeave or its installer.
+For macOS (Intel or Apple Silicon):
 
-Optional MinGW presets are supplied for an independently installed matching Qt
-MinGW kit; the delivered artifacts use MSVC. Do not mix MinGW headers with MSVC.
+```bash
+./scripts/build-macos.sh debug
+./scripts/build-macos.sh release --package
+```
 
+```bash
+cmake --preset macos-debug
+cmake --build --preset macos-debug
+ctest --preset macos-debug
+cmake --preset macos-release
+cmake --build --preset macos-release
+ctest --preset macos-release
+cpack --config build/macos/Release/CPackConfig.cmake -G DragNDrop
+```
+
+On Windows, the workspace includes shared Qt under `.tools/Qt/6.8.3/msvc2022_64` when available.
+The Windows helper uses it automatically when QT_ROOT_DIR is unset.
+On macOS, set `QT_ROOT_DIR` to your local Qt prefix or use install-qt-action in CI.
+Optional MinGW presets are supplied for an independently installed Qt MinGW kit; the primary delivered artifacts use MSVC.
+Do not mix MinGW headers with MSVC runtime.
 ## Run and install
 
-The exact repository-relative setup path is:
+Windows installer path:
 
 **`release/PathWeave-Setup-x64.exe`**
 
-Run the installer, then open PathWeave from the Start menu. The default application
-folder is `%LOCALAPPDATA%\PathWeave`. Select a different installation folder if needed.
-Development executable: `build/Release/PathWeave.exe` (Qt bin must be on PATH).
-The packaged installation supplies shared Qt libraries and Windows/SQLite/TLS plugins.
+macOS installer path (CI generated):
 
-```powershell
-./build/Release/PathWeave.exe
-./build/Release/PathWeave.exe --data-dir ./artifacts/my-test-profile
+**`release/PathWeave-Setup-macOS-<arch>.dmg`**
+
+Windows: run the installer and open PathWeave from the Start menu.
+Default install folder is `%LOCALAPPDATA%\PathWeave`.
+
+macOS: open the `.dmg`, drag `PathWeave.app` to Applications, and run from Applications.
+
+Development binaries:
+
+```bash
+./build/Release/PathWeave (Windows)
+./build/macos/Release/PathWeave.app/Contents/MacOS/PathWeave (macOS)
+./build/Release/PathWeave --data-dir ./artifacts/my-test-profile
 ```
-
-The installer is unsigned. No code-signing certificate is configured, so Windows
-SmartScreen may display a warning. The packaging helper prints the exact artifact
-path, version, size and SHA-256; installer verification writes `release/SHA256SUMS.txt`.
-
+The installer is unsigned. No code-signing certificate is configured, so OS security prompts may appear.
+Packaging writes `release/SHA256SUMS.txt` with SHA-256 and exact file size.
 ## Tests and verification
 
 Qt Test covers survey validation, profile completion, type/mode separation,
@@ -314,3 +332,4 @@ licensing requirements described in [third-party notices](docs/THIRD_PARTY_NOTIC
 The installer includes GPL/LGPL license texts. Distributors must preserve Qt notices,
 provide access to the matching Qt source and permit replacement/debugging of modified
 shared Qt libraries. See [Qt licensing](https://doc.qt.io/qt-6/licensing.html).
+

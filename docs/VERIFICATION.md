@@ -38,7 +38,9 @@ non-demo report cohorts, ICS timestamps and permanent deletion.
 
 Repository: `C:/Users/ANHKHOI/Documents/ChatGPT/Path_Weave`
 
-Installer: `C:/Users/ANHKHOI/Documents/ChatGPT/Path_Weave/release/PathWeave-Setup-x64.exe`
+Installer (Windows): `C:/Users/ANHKHOI/Documents/ChatGPT/Path_Weave/release/PathWeave-Setup-x64.exe`
+
+Installer (macOS, CI artifact): `C:/Users/ANHKHOI/Documents/ChatGPT/Path_Weave/release/PathWeave-Setup-macOS-<arch>.dmg`
 
 Size: **36,180,706 bytes**
 
