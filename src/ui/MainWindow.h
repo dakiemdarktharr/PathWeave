@@ -54,13 +54,11 @@ class MainWindow : public QMainWindow {
     QSystemTrayIcon* tray_ = nullptr;
     bool quitting_ = false;
     void nextSearch();
-    void scheduledTick();
     void runSavedSearch(qint64 id);
     void cancelSync();
     QWidget* dashboard();
     QWidget* discover(bool saved = false);
-    QWidget* calendar();
-    QWidget* reports();
+    void ensureOnlineDefaults();
     QWidget* settings();
     QWidget* sources();
     void configureSource(QString sourceId);

@@ -6,18 +6,15 @@
 #include "services/BackupCrypto.h"
 #include "services/DiscoveryPolicy.h"
 #include <QCryptographicHash>
-#include "reports/Reports.h"
 #include <QDesktopServices>
 #include <QJsonDocument>
-#include <QPrinter>
 #include <QSaveFile>
 #include <QUrlQuery>
 #include <QtWidgets>
 namespace pw {
 static QStringList pages = {
-    "Tổng quan", "Khám phá việc làm", "Việc đã lưu",      "Ứng tuyển", "Công việc hiện tại",
-    "Dự án",     "Nhiệm vụ",          "Thành tựu",        "Kỹ năng",   "Liên hệ",
-    "Lịch",      "Báo cáo",           "Nguồn tuyển dụng", "Cài đặt"};
+    "Tổng quan", "Khám phá việc làm", "Việc đã lưu", "Ứng tuyển", "Công việc hiện tại",
+    "Nguồn tuyển dụng", "Cài đặt"};
 static QPushButton* button(QString label, QBoxLayout* l, std::function<void()> action) {
     auto* b = new QPushButton(label);
     b->setCursor(Qt::PointingHandCursor);
@@ -74,7 +71,7 @@ MainWindow::MainWindow(CareerService& s, SecretStore& secrets, QWidget* parent)
     auto* top = new QHBoxLayout;
     search_ = new QLineEdit;
     search_->setObjectName("globalSearch");
-    search_->setPlaceholderText("Tìm việc, dự án, thành tựu, ghi chú…  Ctrl+K");
+    search_->setPlaceholderText("Tìm việc, công ty hoặc ghi chú…  Ctrl+K");
     top->addWidget(search_, 1);
     netStatus_ = new QLabel;
     top->addWidget(netStatus_);
@@ -140,10 +137,7 @@ MainWindow::MainWindow(CareerService& s, SecretStore& secrets, QWidget* parent)
     });
     if (QSystemTrayIcon::isSystemTrayAvailable())
         tray_->show();
-    auto* scheduler = new QTimer(this);
-    scheduler->setInterval(30000);
-    connect(scheduler, &QTimer::timeout, this, &MainWindow::scheduledTick);
-    scheduler->start();
+    ensureOnlineDefaults();
     applyTheme();
     nav_->setCurrentRow(0);
 }
@@ -209,6 +203,11 @@ void MainWindow::navigate(int page) {
         return;
     page_ = page;
     refresh();
+    if (page == 1)
+        QTimer::singleShot(0, this, [this] {
+            if (page_ == 1 && !syncing_)
+                syncSources();
+        });
 }
 void MainWindow::refresh() {
     while (auto* item = content_->takeAt(0)) {
@@ -238,62 +237,21 @@ void MainWindow::refresh() {
             auto* t = new QTabWidget;
             t->addTab(entityPage("applications"), "Hồ sơ");
             t->addTab(entityPage("interviews"), "Phỏng vấn");
-            t->addTab(entityPage("application_evidence"), "Liên kết minh chứng");
             t->addTab(entityPage("documents"), "Tài liệu");
             t->addTab(entityPage("resume_drafts"), "CV theo công việc");
             t->addTab(entityPage("application_documents"), "Gắn tài liệu");
             w = t;
             break;
         }
-        case 4: {
-            auto* t = new QTabWidget;
-            t->addTab(entityPage("current_roles"), "Vai trò");
-            t->addTab(entityPage("goals"), "Mục tiêu");
-            t->addTab(entityPage("work_logs"), "Nhật ký / phản hồi");
-            w = t;
+        case 4:
+            w = entityPage("current_roles");
             break;
-        }
         case 5:
-            w = entityPage("projects");
-            break;
-        case 6:
-            w = entityPage("tasks");
-            break;
-        case 7: {
-            auto* t = new QTabWidget;
-            t->addTab(entityPage("achievements"), "Thành tựu");
-            t->addTab(entityPage("career_evidence"), "Minh chứng");
-            w = t;
-            break;
-        }
-        case 8: {
-            auto* t = new QTabWidget;
-            t->addTab(entityPage("skills"), "Kỹ năng");
-            t->addTab(entityPage("project_skills"), "Theo dự án");
-            t->addTab(entityPage("achievement_skills"), "Theo thành tựu");
-            w = t;
-            break;
-        }
-        case 9: {
-            auto* t = new QTabWidget;
-            t->addTab(entityPage("contacts"), "Danh bạ");
-            t->addTab(entityPage("application_contacts"), "Theo hồ sơ");
-            w = t;
-            break;
-        }
-        case 10:
-            w = calendar();
-            break;
-        case 11:
-            w = reports();
-            break;
-        case 12:
             w = sources();
             break;
-        case 13:
+        case 6:
             w = settings();
-            break;
-        }
+            break;}
         if (w)
             content_->addWidget(w);
     } catch (const std::exception& e) {
@@ -655,130 +613,99 @@ QWidget* MainWindow::dashboard() {
     auto* l = new QVBoxLayout(page);
     l->setContentsMargins(0, 0, 6, 0);
     l->setSpacing(18);
-    auto profile = service_.profile();
-    auto rows = service_.db.all("user_profile");
-    int completion = rows.isEmpty() ? 0 : rows[0].toObject()["completion"].toInt();
-    auto* intro =
-        new QLabel("<h2>Chào " + profile["display_name"].toString("bạn").toHtmlEscaped() +
-                   ", mỗi bước đều có giá trị.</h2><p>Kết nối công việc đang làm với cơ hội tiếp theo.</p>");
+
+    const auto profile = service_.profile();
+    const auto profileRows = service_.db.all("user_profile");
+    const int completion = profileRows.isEmpty() ? 0 : profileRows[0].toObject()["completion"].toInt();
+    auto* intro = new QLabel(
+        "<h2>Chào " + profile["display_name"].toString("bạn").toHtmlEscaped() +
+        ", sẵn sàng cho bước tiếp theo?</h2><p>Quản lý hồ sơ, tìm việc và ứng tuyển trong một không gian riêng tư.</p>");
     intro->setWordWrap(true);
     l->addWidget(intro);
+
     if (completion < 100) {
-        auto* bar = new QHBoxLayout;
-        auto* label = new QLabel(
-            QString("Hồ sơ chưa hoàn chỉnh · %1%  — Bổ sung sở thích để đối chiếu việc làm tốt hơn.")
-                .arg(completion));
+        auto* incomplete = new QHBoxLayout;
+        auto* label = new QLabel(QString("Hồ sơ hoàn thành %1% · bổ sung thông tin để đề xuất việc phù hợp hơn.")
+                                     .arg(completion));
         label->setWordWrap(true);
-        bar->addWidget(label, 1);
-        button("Hoàn thiện hồ sơ", bar, [this] {
+        incomplete->addWidget(label, 1);
+        button("Hoàn thiện hồ sơ", incomplete, [this] {
             SurveyDialog d(service_, this);
             d.exec();
             refresh();
         });
-        l->addLayout(bar);
+        l->addLayout(incomplete);
     }
-    auto scalar = [this](QString sql, QVariantList args = QVariantList()) {
-        auto a = service_.db.query(sql, args);
-        return a.isEmpty() ? 0 : a[0].toObject()["n"].toInt();
+
+    auto scalar = [this](const QString& sql, const QVariantList& args = {}) {
+        const auto rows = service_.db.query(sql, args);
+        return rows.isEmpty() ? 0 : rows[0].toObject()["n"].toInt();
     };
-    QString today = QDate::currentDate().toString(Qt::ISODate), month = today.left(7);
+    const QString today = QDate::currentDate().toString(Qt::ISODate);
     auto* cards = new QHBoxLayout;
-    auto card = [&](QString heading, QString text) {
-        auto* g = new QGroupBox(heading);
-        auto* gl = new QVBoxLayout(g);
+    auto card = [&](const QString& heading, const QString& text) {
+        auto* group = new QGroupBox(heading);
+        auto* layout = new QVBoxLayout(group);
         auto* label = new QLabel(text);
         label->setWordWrap(true);
         label->setTextFormat(Qt::RichText);
-        gl->addWidget(label);
-        cards->addWidget(g, 1);
+        layout->addWidget(label);
+        cards->addWidget(group, 1);
     };
-    auto roles = service_.db.query(
+
+    const auto roles = service_.db.query(
         "SELECT * FROM current_roles WHERE is_current=1 AND deleted_at IS NULL ORDER BY id DESC");
-    QString role = roles.isEmpty() ? "Chưa có công việc hiện tại"
-                                   : esc(roles[0].toObject()["job_title"]) + "<br>" +
-                                         esc(roles[0].toObject()["company_name"]);
+    const QString role = roles.isEmpty()
+                             ? "Chưa có công việc hiện tại"
+                             : esc(roles[0].toObject()["job_title"]) + "<br>" +
+                                   esc(roles[0].toObject()["company_name"]);
     card("01  CÔNG VIỆC HIỆN TẠI",
-         "<h3>" + role + "</h3>" +
-             QString("<p><b>%1</b> dự án đang làm · <b>%2</b> nhiệm vụ quá hạn</p><p>%3 mục tiêu có rủi ro · "
-                     "%4 thành tựu tháng này</p>")
-                 .arg(scalar("SELECT COUNT(*) n FROM projects WHERE status='active' AND deleted_at IS NULL"))
-                 .arg(scalar("SELECT COUNT(*) n FROM tasks WHERE due_date<? AND status NOT IN "
-                             "('completed','cancelled') AND deleted_at IS NULL",
-                             {today}))
-                 .arg(scalar("SELECT COUNT(*) n FROM goals WHERE status='at_risk' AND deleted_at IS NULL"))
-                 .arg(scalar("SELECT COUNT(*) n FROM achievements WHERE date LIKE ? AND deleted_at IS NULL",
-                             {month + "%"})));
-    card(
-        "02  CƠ HỘI TIẾP THEO",
-        QString("<h1>%1 <small>hồ sơ đang tiến triển</small></h1><p>%2 tin gợi ý · %3 việc đã lưu</p><p>%4 "
-                "theo dõi hôm nay · %5 phỏng vấn sắp tới</p>")
-            .arg(scalar("SELECT COUNT(*) n FROM applications WHERE status NOT IN "
-                        "('rejected','withdrawn','archived') AND deleted_at IS NULL"))
-            .arg(scalar("SELECT COUNT(*) n FROM job_listings WHERE status='new' AND deleted_at IS NULL"))
-            .arg(service_.db.count("saved_jobs"))
-            .arg(scalar("SELECT COUNT(*) n FROM applications WHERE next_action_date=? AND deleted_at IS NULL",
-                        {today}))
-            .arg(scalar("SELECT COUNT(*) n FROM interviews WHERE scheduled_at>=? AND deleted_at IS NULL",
-                        {today})));
-    card("03  MINH CHỨNG NGHỀ NGHIỆP",
-         QString("<h1>%1 <small>minh chứng đã lưu</small></h1><p>%2 chưa liên kết với ứng tuyển</p><p>%3 kỹ "
-                 "năng dùng trong tháng</p><p>Ghi lại điều đã làm. Chỉ dùng kết quả bạn cung cấp.</p>")
-             .arg(service_.db.count("career_evidence"))
-             .arg(scalar(
-                 "SELECT COUNT(*) n FROM career_evidence e WHERE deleted_at IS NULL AND NOT EXISTS(SELECT 1 "
-                 "FROM application_evidence a WHERE a.evidence_id=e.id AND a.deleted_at IS NULL)"))
-             .arg(scalar("SELECT COUNT(*) n FROM skills WHERE last_used LIKE ? AND deleted_at IS NULL",
-                         {month + "%"})));
+         "<h3>" + role + "</h3><p>Vai trò hiện tại là nền tảng để cá nhân hóa CV và đối chiếu việc làm.</p>");
+    card("02  CƠ HỘI TIẾP THEO",
+         QString("<h1>%1</h1><p>%2 tin mới · %3 việc đã lưu</p><p>%4 hồ sơ đang tiến triển · %5 phỏng vấn sắp tới</p>")
+             .arg(scalar("SELECT COUNT(*) n FROM job_listings WHERE status='new' AND deleted_at IS NULL"))
+             .arg(service_.db.count("saved_jobs"))
+             .arg(scalar("SELECT COUNT(*) n FROM applications WHERE status NOT IN "
+                         "('rejected','withdrawn','archived') AND deleted_at IS NULL"))
+             .arg(scalar("SELECT COUNT(*) n FROM interviews WHERE scheduled_at>=? AND deleted_at IS NULL", {today})));
+    const int skillCount = profile["hard_skills"].toString().split(QRegularExpression("[,;\\n]"),
+                                                                     Qt::SkipEmptyParts)
+                               .size() +
+                           profile["soft_skills"].toString().split(QRegularExpression("[,;\\n]"),
+                                                                     Qt::SkipEmptyParts)
+                               .size();
+    card("03  CV THEO JD",
+         QString("<h1>%1</h1><p>%2 phiên bản CV đã lưu</p><p>CV được tạo từ dữ liệu hồ sơ bạn nhập và JD cụ thể.</p>")
+             .arg(skillCount)
+             .arg(service_.db.count("resume_drafts")));
     l->addLayout(cards);
+
     auto* quick = new QHBoxLayout;
-    button("+ Công việc", quick, [this] { edit("current_roles"); });
-    button("+ Dự án", quick, [this] { edit("projects"); });
-    button("+ Nhiệm vụ", quick, [this] { edit("tasks"); });
-    button("✦ Ghi thành tựu", quick, [this] { edit("achievements"); })->setObjectName("primary");
-    button("Tìm việc", quick, [this] { nav_->setCurrentRow(1); });
+    button("+ Công việc hiện tại", quick, [this] { edit("current_roles"); });
+    button("Tìm việc trực tuyến", quick, [this] { nav_->setCurrentRow(1); });
+    button("Lưu việc thủ công", quick, [this] { edit("job_listings"); });
+    button("+ Ứng tuyển", quick, [this] { edit("applications"); });
+    quick->addStretch();
     l->addLayout(quick);
-    auto* quick2 = new QHBoxLayout;
-    button("Lưu việc thủ công", quick2, [this] { edit("job_listings"); });
-    button("+ Ứng tuyển", quick2, [this] { edit("applications"); });
-    button("+ Phỏng vấn", quick2, [this] { edit("interviews"); });
-    button("Tạo báo cáo", quick2, [this] { nav_->setCurrentRow(11); });
-    quick2->addStretch();
-    l->addLayout(quick2);
-    auto* bottom = new QHBoxLayout;
-    auto* timeline = browser();
-    QString html = "<h2>Dòng thời gian thống nhất</h2>";
-    auto events = Reports(service_.db).timeline();
-    if (events.isEmpty())
-        html += "<p>Chưa có hoạt động. Thêm nhiệm vụ hoặc thành tựu đầu tiên.</p>";
-    for (auto v : events) {
-        auto r = v.toObject();
-        html += "<p><span style='color:#6f8d99'>" + esc(r["date"]) + "</span><br><b>" + esc(r["title"]) +
-                "</b> · " + entity(r["entity"].toString()).label + "</p><hr>";
-    }
-    timeline->setHtml(html);
-    timeline->setMinimumHeight(300);
-    bottom->addWidget(timeline, 3);
-    auto* summary = browser();
-    QString right = "<h2>Thành tựu gần đây</h2>";
-    int n = 0;
-    for (auto v : service_.db.all("achievements")) {
-        if (n++ >= 4)
+
+    auto* applications = browser();
+    QString html = "<h2>Ứng tuyển gần đây</h2>";
+    int count = 0;
+    for (auto v : service_.db.all("applications")) {
+        if (count++ >= 6)
             break;
-        auto r = v.toObject();
-        right += "<p><b>" + esc(r["title"]) + "</b><br>" + esc(r["skills"]) + "</p>";
+        const auto a = v.toObject();
+        html += "<p><b>" + esc(a["title"]) + "</b> · " + esc(a["company"]) + " · " +
+                displayValue(a["status"].toString()) + "</p>";
     }
-    right += "<h2>Ứng tuyển theo trạng thái</h2>";
-    for (auto v : service_.db.query(
-             "SELECT status,COUNT(*) n FROM applications WHERE deleted_at IS NULL GROUP BY status")) {
-        auto r = v.toObject();
-        right += "<p>" + displayValue(r["status"].toString()) + " <b>" + esc(r["n"]) + "</b></p>";
-    }
-    right += "<p>Mở Báo cáo để xem tổng kết công việc tháng này.</p>";
-    summary->setHtml(right);
-    bottom->addWidget(summary, 2);
-    l->addLayout(bottom);
+    if (count == 0)
+        html += "<p>Chưa có hồ sơ ứng tuyển. Hãy lưu một việc rồi tạo hồ sơ.</p>";
+    applications->setHtml(html);
+    applications->setMinimumHeight(240);
+    l->addWidget(applications);
+
     auto* demo = new QHBoxLayout;
-    auto* note = new QLabel("Bắt đầu nhanh bằng dữ liệu minh họa, được gắn nhãn DEMO.");
+    auto* note = new QLabel("Dữ liệu minh họa được gắn nhãn DEMO và có thể xóa trong Cài đặt.");
     demo->addWidget(note, 1);
     button("Tải dữ liệu mẫu", demo, [this] {
         try {
@@ -822,7 +749,6 @@ QWidget* MainWindow::discover(bool saved) {
     tabs->addTab("Từ xa");
     tabs->addTab("Kết hợp");
     tabs->addTab("Mới hôm nay");
-    tabs->addTab("Tìm kiếm đã lưu");
     tabs->setObjectName("jobViews");
     l->addWidget(tabs);
     auto* bar = new QHBoxLayout;
@@ -973,14 +899,6 @@ QWidget* MainWindow::discover(bool saved) {
             type->setCurrentIndex(i);
         if (i == 3 || i == 4)
             mode->setCurrentIndex(i - 2);
-        if (i == 6) {
-            QDialog d(this);
-            d.setWindowTitle("Tìm kiếm đã lưu");
-            d.resize(900, 500);
-            auto* dl = new QVBoxLayout(&d);
-            dl->addWidget(entityPage("saved_searches"));
-            d.exec();
-        }
         populate();
     });
     auto* actions = new QHBoxLayout;
@@ -1035,141 +953,11 @@ QWidget* MainWindow::discover(bool saved) {
     l->addLayout(actions);
     auto* bottom = new QHBoxLayout;
     button("Lưu việc thủ công", bottom, [this] { edit("job_listings"); });
-    button("Lưu bộ lọc", bottom, [=, this] {
-        edit("saved_searches", 0,
-             {{"query", keyword->text()},
-              {"location", location->text()},
-              {"interval_hours", 24},
-              {"employment_type",
-               QJsonValue::fromVariant(type->currentData().toString().isEmpty() ? QVariant()
-                                                                                : type->currentData())},
-              {"workplace_mode",
-               QJsonValue::fromVariant(mode->currentData().toString().isEmpty() ? QVariant()
-                                                                                : mode->currentData())}});
-    });
     button("Hủy kết nối", bottom, [this] { cancelSync(); });
     bottom->addStretch();
     l->addLayout(bottom);
     populate();
     return page;
-}
-QWidget* MainWindow::calendar() {
-    auto* p = new QWidget;
-    auto* l = new QVBoxLayout(p);
-    auto* exportCalendar = new QPushButton("Xuất lịch ICS");
-    l->addWidget(exportCalendar);
-    connect(exportCalendar, &QPushButton::clicked, this, [this] {
-        auto path = QFileDialog::getSaveFileName(this, "Xuất lịch", "PathWeave.ics", "iCalendar (*.ics)");
-        if (path.isEmpty())
-            return;
-        auto bytes = Reports(service_.db).ics().toUtf8();
-        QSaveFile f(path);
-        if (!f.open(QIODevice::WriteOnly) || f.write(bytes) != bytes.size() || !f.commit())
-            QMessageBox::warning(this, "Lịch", "Không ghi được lịch.");
-    });
-
-    auto* top = new QHBoxLayout;
-    button("+ Nhắc nhở", top, [this] { edit("reminders"); });
-    button("+ Phỏng vấn", top, [this] { edit("interviews"); });
-    top->addStretch();
-    l->addLayout(top);
-    auto* split = new QSplitter;
-    auto* cal = new QCalendarWidget;
-    auto* list = new QListWidget;
-    split->addWidget(cal);
-    split->addWidget(list);
-    l->addWidget(split, 1);
-    auto events = Reports(service_.db).calendar();
-    for (auto v : events) {
-        auto raw = v.toObject()["date"].toString();
-        auto date = raw.contains('T') ? QDateTime::fromString(raw, Qt::ISODate).toLocalTime().date()
-                                      : QDate::fromString(raw, Qt::ISODate);
-        if (date.isValid()) {
-            QTextCharFormat fmt;
-            fmt.setBackground(QColor("#39a69b"));
-            fmt.setForeground(Qt::black);
-            cal->setDateTextFormat(date, fmt);
-        }
-    }
-    auto update = [=] {
-        list->clear();
-        for (auto v : events) {
-            auto r = v.toObject();
-            auto raw = r["date"].toString();
-            auto date = raw.contains('T') ? QDateTime::fromString(raw, Qt::ISODate).toLocalTime().date()
-                                          : QDate::fromString(raw, Qt::ISODate);
-            if (date != cal->selectedDate())
-                continue;
-            auto* item = new QListWidgetItem(entity(r["entity"].toString()).label + " · " +
-                                                 r["title"].toString() + "\n" + r["date"].toString(),
-                                             list);
-            item->setData(Qt::UserRole, r);
-            item->setSizeHint(QSize(300, 65));
-        }
-        if (!list->count())
-            list->addItem("Không có sự kiện trong ngày này.");
-    };
-    connect(cal, &QCalendarWidget::selectionChanged, p, update);
-    connect(list, &QListWidget::itemDoubleClicked, p, [this](QListWidgetItem* item) {
-        auto r = item->data(Qt::UserRole).toJsonObject();
-        if (!r.isEmpty())
-            edit(r["entity"].toString(), r["id"].toInteger());
-    });
-    update();
-    return p;
-}
-QWidget* MainWindow::reports() {
-    auto* p = new QWidget;
-    auto* l = new QVBoxLayout(p);
-    auto* bar = new QHBoxLayout;
-    auto* type = new QComboBox;
-    type->addItems({"Công việc tháng", "Minh chứng nghề nghiệp", "Phễu ứng tuyển", "Độ phù hợp và nguồn"});
-    bar->addWidget(type, 1);
-    auto* month = new QDateEdit(QDate::currentDate());
-    month->setDisplayFormat("yyyy-MM");
-    bar->addWidget(month);
-    l->addLayout(bar);
-    auto* b = browser();
-    l->addWidget(b, 1);
-    auto update = [=, this] {
-        b->setHtml(Reports(service_.db).html(type->currentIndex(), month->date().toString("yyyy-MM")));
-    };
-    connect(type, &QComboBox::currentIndexChanged, p, update);
-    connect(month, &QDateEdit::dateChanged, p, update);
-    auto* actions = new QHBoxLayout;
-    for (auto format : {"Markdown", "HTML", "PDF"})
-        button("Xuất " + QString(format), actions, [=, this] {
-            QString suffix = QString(format) == "Markdown" ? "md" : QString(format).toLower();
-            QString path = QFileDialog::getSaveFileName(this, "Xuất báo cáo", "PathWeave-report." + suffix,
-                                                        "*." + suffix);
-            if (path.isEmpty())
-                return;
-            Reports r(service_.db);
-            QString period = month->date().toString("yyyy-MM");
-            if (suffix == "pdf") {
-                QTextDocument doc;
-                doc.setHtml(r.html(type->currentIndex(), period));
-                QPrinter printer(QPrinter::HighResolution);
-                printer.setOutputFormat(QPrinter::PdfFormat);
-                printer.setOutputFileName(path);
-                doc.print(&printer);
-            } else {
-                QSaveFile f(path);
-                if (!f.open(QIODevice::WriteOnly)) {
-                    QMessageBox::warning(this, "Xuất", "Không thể mở tệp.");
-                    return;
-                }
-                f.write((suffix == "md" ? r.markdown(type->currentIndex(), period)
-                                        : r.html(type->currentIndex(), period))
-                            .toUtf8());
-                if (!f.commit())
-                    QMessageBox::warning(this, "Xuất", "Không thể lưu tệp.");
-            }
-        });
-    actions->addStretch();
-    l->addLayout(actions);
-    update();
-    return p;
 }
 void MainWindow::exportData() {
     auto path = QFileDialog::getSaveFileName(this, "Sao lưu gồm CV và tài liệu; không có khóa API",
@@ -1257,24 +1045,15 @@ QWidget* MainWindow::settings() {
     auto* privacy = new QGroupBox("Quyền riêng tư");
     auto* pl = new QVBoxLayout(privacy);
     auto* explanation =
-        new QLabel("Mọi tính năng cục bộ hoạt động ngoại tuyến. Khi bạn chủ động tìm việc, chỉ từ khóa / địa "
-                   "điểm tìm kiếm và thông tin kỹ thuật kết nối được gửi đến nguồn đã bật. Không tải lên CV, "
-                   "ghi chú công việc hoặc hồ sơ ứng tuyển. Không telemetry.");
+        new QLabel("Tìm việc trực tuyến được bật sẵn để nút Tìm trực tuyến hoạt động ngay. Chỉ từ khóa và địa "
+                   "điểm tìm kiếm được gửi đến nguồn đã bật; CV, ghi chú công việc và hồ sơ ứng tuyển luôn ở trên máy. "
+                   "Bạn có thể tắt mạng bất cứ lúc nào.");
     explanation->setWordWrap(true);
     pl->addWidget(explanation);
     auto* online = new QCheckBox("Bật tìm việc trực tuyến");
-    online->setChecked(service_.db.setting("online_enabled") == "true");
+    online->setChecked(service_.db.setting("online_enabled", "true") == "true");
     pl->addWidget(online);
-    connect(online, &QCheckBox::toggled, this, [this, online](bool enabled) {
-        if (enabled &&
-            QMessageBox::question(
-                this, "Bật tìm việc trực tuyến",
-                "Nguồn đã bật sẽ nhận từ khóa tìm kiếm bạn nhập, địa chỉ IP và yêu cầu API khi bạn nhấn Tìm "
-                "trực tuyến. Dữ liệu nghề nghiệp không được gửi. Cho phép?") != QMessageBox::Yes) {
-            QSignalBlocker blocker(online);
-            online->setChecked(false);
-            return;
-        }
+    connect(online, &QCheckBox::toggled, this, [this](bool enabled) {
         service_.db.setSetting("online_enabled", enabled ? "true" : "false");
         if (!enabled)
             cancelSync();
@@ -1335,7 +1114,7 @@ QWidget* MainWindow::settings() {
         statusBar()->showMessage("Đã lưu trọng số.", 5000);
     });
     l->addWidget(weights);
-    auto* discovery = new QGroupBox("Gợi ý và chạy nền");
+    auto* discovery = new QGroupBox("Gợi ý việc làm");
     auto* discoveryForm = new QFormLayout(discovery);
     auto* threshold = new QSpinBox;
     threshold->setRange(0, 100);
@@ -1349,30 +1128,6 @@ QWidget* MainWindow::settings() {
     discoveryForm->addRow("Số trang mỗi từ khóa (Adzuna)", pages);
     connect(pages, &QSpinBox::valueChanged, this,
             [this](int v) { service_.db.setSetting("search_pages", QString::number(v)); });
-    auto* automatic =
-        new QCheckBox("Cho phép lịch tìm kiếm đã lưu và tần suất trong khảo sát khi app đang chạy");
-    automatic->setChecked(service_.db.setting("automatic_search_enabled") == "true");
-    discoveryForm->addRow(automatic);
-    connect(automatic, &QCheckBox::toggled, this, [this](bool on) {
-        service_.db.setSetting("automatic_search_enabled", on ? "true" : "false");
-        if (!on)
-            cancelSync();
-    });
-    auto* background = new QCheckBox("Đóng cửa sổ vẫn chạy ở khay hệ thống (Thoát để dừng)");
-    background->setChecked(service_.db.setting("background_enabled") == "true");
-    discoveryForm->addRow(background);
-    connect(background, &QCheckBox::toggled, this,
-            [this](bool on) { service_.db.setSetting("background_enabled", on ? "true" : "false"); });
-    auto* reminders = new QCheckBox("Thông báo nhắc việc đến hạn hôm nay");
-    reminders->setChecked(service_.db.setting("reminders_enabled") == "true");
-    discoveryForm->addRow(reminders);
-    connect(reminders, &QCheckBox::toggled, this,
-            [this](bool on) { service_.db.setSetting("reminders_enabled", on ? "true" : "false"); });
-    auto* feedback = new QCheckBox("Điều chỉnh tối đa ±4 điểm từ thao tác Lưu / Tạo hồ sơ / Bỏ qua");
-    feedback->setChecked(service_.db.setting("explicit_feedback_enabled", "true") == "true");
-    discoveryForm->addRow(feedback);
-    connect(feedback, &QCheckBox::toggled, this,
-            [this](bool on) { service_.db.setSetting("explicit_feedback_enabled", on ? "true" : "false"); });
     l->addWidget(discovery);
     auto* data = new QGroupBox("Dữ liệu và sao lưu");
     auto* dl = new QVBoxLayout(data);
@@ -1591,13 +1346,48 @@ void MainWindow::configureSource(QString id) {
     if (d.exec() == QDialog::Accepted)
         refresh();
 }
+void MainWindow::runSavedSearch(qint64 id) {
+    auto r = service_.db.get("saved_searches", id);
+    if (r.isEmpty())
+        return;
+    service_.db.setSetting("search_keyword", r["query"].toString());
+    service_.db.setSetting("search_location", r["location"].toString());
+    service_.db.setSetting("search_type", r["employment_type"].toString());
+    service_.db.setSetting("search_mode", r["workplace_mode"].toString());
+    if (auto* dialog = qobject_cast<QDialog*>(QApplication::activeModalWidget()))
+        dialog->accept();
+    QTimer::singleShot(0, this, [this] {
+        navigate(1);
+        if (service_.db.setting("online_enabled") == "true")
+            syncSources();
+        else
+            statusBar()->showMessage("Đã áp dụng bộ lọc vào dữ liệu cục bộ. Bật trực tuyến để lấy tin mới.",
+                                     6000);
+    });
+}
 void MainWindow::cancelSync() {
     ++syncEpoch_;
     syncing_ = false;
     searchQueue_.clear();
     network_.cancelAll();
 }
+void MainWindow::ensureOnlineDefaults() {
+    // A fresh profile starts ready to search. Users can still turn networking off in Settings.
+    if (service_.db.setting("online_enabled").isEmpty())
+        service_.db.setSetting("online_enabled", "true");
+
+    const auto rows = service_.db.query(
+        "SELECT id FROM job_sources WHERE source_id=? AND deleted_at IS NULL", {"remotive"});
+    if (rows.isEmpty()) {
+        service_.db.save("job_sources",
+                         {{"source_id", "remotive"},
+                          {"display_name", "Remotive"},
+                          {"enabled", 1},
+                          {"config", QJsonObject()}});
+    }
+}
 void MainWindow::syncSources() {
+    ensureOnlineDefaults();
     if (syncing_) {
         statusBar()->showMessage("Đang đồng bộ. Chờ hoàn tất hoặc hủy.", 4000);
         return;
@@ -1629,10 +1419,11 @@ void MainWindow::syncSources() {
     }
     if (sources_.empty()) {
         QMessageBox::information(this, "Nguồn",
-                                 "Chưa có nguồn trực tuyến được bật. Mở Nguồn tuyển dụng để cấu hình.");
+                                 "Không có nguồn trực tuyến đang bật. Remotive được bật mặc định; bạn có thể quản lý thêm nguồn trong Nguồn tuyển dụng.");
         return;
     }
     syncing_ = true;
+    statusBar()->showMessage("Đang tìm việc trực tuyến…", 5000);
     auto queries = DiscoveryPolicy::queries(
         service_.profile(), service_.db.setting("search_keyword"), service_.db.setting("search_location"),
         service_.db.setting("search_type"), service_.db.setting("search_pages", "1").toInt());
@@ -1718,87 +1509,5 @@ void MainWindow::nextSearch() {
                 nextSearch();
         });
     });
-}
-void MainWindow::runSavedSearch(qint64 id) {
-    auto r = service_.db.get("saved_searches", id);
-    if (r.isEmpty())
-        return;
-    service_.db.setSetting("search_keyword", r["query"].toString());
-    service_.db.setSetting("search_location", r["location"].toString());
-    service_.db.setSetting("search_type", r["employment_type"].toString());
-    service_.db.setSetting("search_mode", r["workplace_mode"].toString());
-    if (auto* dialog = qobject_cast<QDialog*>(QApplication::activeModalWidget()))
-        dialog->accept();
-    QTimer::singleShot(0, this, [this] {
-        navigate(1);
-        if (service_.db.setting("online_enabled") == "true")
-            syncSources();
-        else
-            statusBar()->showMessage("Đã áp dụng bộ lọc vào dữ liệu cục bộ. Bật trực tuyến để lấy tin mới.",
-                                     6000);
-    });
-}
-void MainWindow::scheduledTick() {
-    try {
-        auto time = QDateTime::currentDateTimeUtc();
-        if (service_.db.setting("reminders_enabled") == "true" && tray_ &&
-            QSystemTrayIcon::isSystemTrayAvailable()) {
-            QStringList due;
-            for (auto v : Reports(service_.db).calendar()) {
-                auto r = v.toObject();
-                auto dt = QDateTime::fromString(r["date"].toString(), Qt::ISODate);
-                auto date = dt.isValid() ? dt.toLocalTime().date()
-                                         : QDate::fromString(r["date"].toString(), Qt::ISODate);
-                auto key = "notified_" + r["entity"].toString() + "_" + QString::number(r["id"].toInteger());
-                if (date == QDate::currentDate() && service_.db.setting(key) != r["date"].toString()) {
-                    due << r["title"].toString();
-                    service_.db.setSetting(key, r["date"].toString());
-                }
-            }
-            if (!due.isEmpty())
-                tray_->showMessage("PathWeave · Hôm nay", due.mid(0, 5).join('\n'));
-        }
-        if (syncing_ || QApplication::activeModalWidget() ||
-            service_.db.setting("online_enabled") != "true" ||
-            service_.db.setting("automatic_search_enabled") != "true")
-            return;
-        bool any = false;
-        for (auto v : service_.db.all("job_sources"))
-            if (v.toObject()["enabled"].toInt() && v.toObject()["source_id"] != "demo")
-                any = true;
-        if (!any)
-            return;
-        for (auto v : service_.db.all("saved_searches")) {
-            auto r = v.toObject();
-            if (!DiscoveryPolicy::due(r, time))
-                continue;
-            service_.db.save("saved_searches",
-                             {{"last_run", now()}, {"next_run", DiscoveryPolicy::nextRun(r, time)}},
-                             r["id"].toInteger());
-            auto keyword = service_.db.setting("search_keyword"),
-                 location = service_.db.setting("search_location"), type = service_.db.setting("search_type");
-            service_.db.setSetting("search_keyword", r["query"].toString());
-            service_.db.setSetting("search_location", r["location"].toString());
-            service_.db.setSetting("search_type", r["employment_type"].toString());
-            syncSources();
-            service_.db.setSetting("search_keyword", keyword);
-            service_.db.setSetting("search_location", location);
-            service_.db.setSetting("search_type", type);
-            return;
-        }
-        auto profile = service_.profile();
-        auto frequency = profile["frequency"].toString();
-        auto next = QDateTime::fromString(service_.db.setting("next_profile_search"), Qt::ISODate);
-        if ((frequency == "daily" || frequency == "weekly") && (!next.isValid() || next <= time)) {
-            service_.db.setSetting("next_profile_search",
-                                   time.addDays(frequency == "weekly" ? 7 : 1).toString(Qt::ISODate));
-            auto keyword = service_.db.setting("search_keyword");
-            service_.db.setSetting("search_keyword", "");
-            syncSources();
-            service_.db.setSetting("search_keyword", keyword);
-        }
-    } catch (const std::exception& e) {
-        statusBar()->showMessage(QString::fromUtf8(e.what()), 10000);
-    }
 }
 } // namespace pw

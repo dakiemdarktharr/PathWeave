@@ -12,7 +12,7 @@ ResumeDialog::ResumeDialog(CareerService& s, qint64 jobId, qint64 applicationId,
     setObjectName("resumeDialog");
     resize(1160, 820);
     auto* layout = new QVBoxLayout(this);
-    auto* intro = new QLabel("Chọn JD và minh chứng được phép chia sẻ. CV được sắp xếp cục bộ từ dữ liệu "
+    auto* intro = new QLabel("Chọn JD và vai trò được phép chia sẻ. CV được sắp xếp cục bộ từ dữ liệu "
                              "thật; bạn kiểm tra trước khi xuất. Không tự nộp hồ sơ.");
     intro->setWordWrap(true);
     layout->addWidget(intro);
@@ -40,14 +40,14 @@ ResumeDialog::ResumeDialog(CareerService& s, qint64 jobId, qint64 applicationId,
     jd_->setPlaceholderText("Dán mô tả và yêu cầu công việc…");
     jd_->setMaximumHeight(180);
     form->addWidget(jd_);
-    auto* profile = new QPushButton("Chỉnh sửa hồ sơ, chứng chỉ, học vấn và liên hệ");
+    auto* profile = new QPushButton("Chỉnh sửa hồ sơ, chứng chỉ và học vấn");
     form->addWidget(profile);
     connect(profile, &QPushButton::clicked, this, [this] {
         SurveyDialog d(service_, this);
         d.exec();
     });
     auto* hint = new QLabel(
-        "Tích các mục được phép đưa vào CV. Ghi chú riêng và dữ liệu demo không được nhập tự động.");
+        "Chọn vai trò được phép đưa vào CV. Ghi chú riêng và dữ liệu demo không được nhập tự động.");
     hint->setWordWrap(true);
     form->addWidget(hint);
     evidence_ = new QListWidget;

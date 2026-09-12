@@ -31,30 +31,23 @@ best CV or hiring success. See [CV guide](docs/CV_AND_DISCOVERY.md).
 
 ## Features
 
-- Vietnamese native desktop interface with 14 navigation pages, light/dark themes,
-  keyboard navigation and Ctrl+K local full-text search.
-- Skippable profile survey covering all eight sections, completion percentage and
-  editable preferences. Employment type and workplace mode are independent.
-- Current roles, projects, tasks, goals, work logs, feedback, blockers, achievements,
-  skills, contacts, managed document copies and reminders.
-- Task lists, status boards and deadline calendars; date, project, role, application,
-  priority and status filters. Drag cards between status columns or double-click to edit.
-- Convert entered achievements to editable career evidence; link evidence to
-  applications without inventing numbers or accomplishments.
-- Separate discovered jobs, saved jobs and applications. Partial unique indexes
-  guard canonical URLs, source IDs and scoped company/title identities. Distinct
-  requisition URLs are kept separate, even when company/title match.
-- Application activity history, interviews, follow-up dates and a unified calendar.
-- Deterministic match scores with visible component scores, reasons, missing
-  preferences, neutral unknown salary, title synonyms and configurable weights.
-- Monthly work, career evidence, application funnel and job match reports.
-  Markdown, HTML and PDF report export; CSV export; JSON and password-encrypted
-  backup/restore including managed documents and CV versions. Demo records are
-  excluded from reports; monthly application cohorts use recorded status events.
-- One-click marked demo dataset and demo removal. Demo vacancies are fictional.
-- Explicit online opt-in, per-source switches, asynchronous sync, opt-in scheduled searches/tray mode, cancellation,
-  TLS validation, timeouts, rate limits and response caching.
+- Vietnamese native desktop interface with seven focused pages: Dashboard, Discover Jobs,
+  Saved Jobs, Applications, Current Work, Job Sources and Settings.
+- Skippable profile survey covering all eight sections, completion percentage and editable
+  preferences. Employment type and workplace mode are independent.
+- Current role management, job discovery, saved jobs, applications, interviews, follow-ups,
+  local documents and job-specific CV drafts.
+- Transparent deterministic match scores with visible reasons, missing preferences,
+  title synonyms, neutral unknown salary and configurable weights.
+- Tailored plain-text CV drafts with an optional user photo; local PDF/HTML/TXT export and
+  explicit review before attaching a document to an application.
+- Demo data, JSON/CSV export, encrypted Windows backup, offline local search and light/dark themes.
+- Online search is asynchronous, cancellable, cached and rate-limited. Remotive is enabled
+  automatically on a fresh profile; additional public connectors are opt-in per source.
 
+The former Projects, Tasks, Achievements, Skills, Contacts, Calendar and Reports pages are
+removed from the navigation. Their storage tables remain only for migration compatibility and
+CV provenance; no hidden page is required to use the current product flow.
 ## Architecture
 
 ```mermaid
@@ -131,15 +124,13 @@ dedicated fields, then enable the source. They are protected with Windows DPAPI 
 for the current OS user, outside SQLite and JSON exports. Never paste keys
 into a generic URL. Clear credentials from Settings when needed.
 
-Enable **Cài đặt → Bật tìm việc trực tuyến**, read the first-use explanation,
-and press **Tìm trực tuyến** in Discover Jobs. An empty keyword searches desired
-titles (up to five; Adzuna up to three pages per title); public board/feed sources
-are fetched once and ranked locally. Scheduled saved searches and daily/weekly
-profile searches require a separate opt-in in Settings. The app must be running
-or in its optional system tray mode. Shutdown does not run searches.
-The interface never uploads a CV, work log, achievement or application note.
-Only selected search terms, target titles when searching from the profile, location
-and provider credentials are sent as needed. CV contents and work records stay local.
+Online search is enabled automatically for a fresh profile and Remotive is enabled as the
+default public source, so **Khám phá việc làm → Tìm trực tuyến** can work immediately.
+Disable it at any time in **Cài đặt**. An empty keyword searches desired titles (up to five;
+Adzuna up to three pages per title); public board/feed sources are fetched asynchronously and
+ranked locally. The interface never uploads a CV, work log, achievement or application note.
+Only selected search terms, target titles when searching from the profile, location and provider
+credentials are sent as needed. CV contents and work records stay local.
 
 Source references: [Adzuna API](https://developer.adzuna.com/),
 [Remotive public API](https://github.com/remotive-com/remote-jobs-api),
@@ -291,10 +282,7 @@ uploads artifacts, and publishes version-tag releases when its token has permiss
 - Synonyms are a curated Vietnamese/English dictionary. Salary text is not reliably
   parsed and different currencies remain neutral; no automatic FX/gross-net conversion.
   Explicit feedback changes at most four points and can be disabled in Settings.
-- Schedules and Windows reminders need the app running; no server or Windows service
-  runs while the PC is off. Notifications depend on Windows notification settings.
-- Calendar exports ICS and converts interview timestamps to UTC. Recurrence editing,
-  Google/Outlook account synchronization and ICS import are not implemented.
+- Online results depend on public source availability and the app must be running while a search is requested; there is no server or Windows service running while the PC is off.
 - EFS depends on Windows edition/filesystem/policy and protects files at rest, not
   against a compromised logged-in account. SQLCipher and a separate app unlock
   password are not implemented. Old plaintext exports and external backups cannot
@@ -317,8 +305,9 @@ signed update delivery after selecting a distribution endpoint and signing ident
   put the matching Qt kit bin on PATH. Do not mix debug/release or MinGW/MSVC DLLs.
 - **FTS5 unavailable:** use a Qt QSQLITE plugin built with FTS5. Startup fails explicitly
   rather than silently degrading search.
-- **No jobs:** inspect per-source configuration, online opt-in, errors and filters.
-  Unknown workplace mode does not match the Remote view. Demo data works offline.
+- **No jobs:** check that online search is enabled, inspect per-source configuration and
+  errors, then review filters. Unknown workplace mode does not match the Remote view.
+  Demo data works offline.
 - **Rate limited:** wait for the source interval; Remotive is limited to one fetch
   per six hours. Cached successful data may be available meanwhile.
 - **Invalid JSON restore:** the version-1 JSON backup format remains accepted, including v2 database fields. Invalid

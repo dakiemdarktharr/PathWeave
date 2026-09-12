@@ -127,6 +127,11 @@ void NetworkService::request(const QUrl& url, const QString& source, int interva
                                    std::max(interval, ok ? std::clamp(retry, 60, 86400) : 300);
             db_.setSetting("rate_" + source, QString::number(nextAllowed_[source]));
         }
+        if (!r.error.isEmpty() && r.status != 429) {
+            // A failed request must not lock the user out for the full source interval.
+            nextAllowed_.remove(source);
+            db_.setSetting("rate_" + source, "0");
+        }
         if (r.error.isEmpty()) {
             r.body = reply->readAll();
             db_.execute(
